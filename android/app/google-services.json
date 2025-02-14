@@ -1,0 +1,119 @@
+{
+  "project_info": {
+    "project_number": "853236505755",
+    "firebase_url": "https://salted26-default-rtdb.firebaseio.com",
+    "project_id": "salted26",
+    "storage_bucket": "salted26.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:853236505755:android:23b2cbc60e1895eef0ba3e",
+        "android_client_info": {
+          "package_name": "com.example.firebase"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "853236505755-4i70tvf0es9ljnj1hs0hojgeqjvobrrp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMmF0AEbl5XaFos1aMjRS5KAkRdmcTMJk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "853236505755-4i70tvf0es9ljnj1hs0hojgeqjvobrrp.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "853236505755-4ll1or6ihnqf55pg94t6a5oqo914o8rs.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.salted26.firebase"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:853236505755:android:cdabd7227e1ac9adf0ba3e",
+        "android_client_info": {
+          "package_name": "com.salted26.firebase"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "853236505755-4i70tvf0es9ljnj1hs0hojgeqjvobrrp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMmF0AEbl5XaFos1aMjRS5KAkRdmcTMJk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "853236505755-4i70tvf0es9ljnj1hs0hojgeqjvobrrp.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "853236505755-4ll1or6ihnqf55pg94t6a5oqo914o8rs.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.salted26.firebase"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:853236505755:android:38eb59aef7cd696df0ba3e",
+        "android_client_info": {
+          "package_name": "com.test.salted26"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "853236505755-4i70tvf0es9ljnj1hs0hojgeqjvobrrp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMmF0AEbl5XaFos1aMjRS5KAkRdmcTMJk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "853236505755-4i70tvf0es9ljnj1hs0hojgeqjvobrrp.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "853236505755-4ll1or6ihnqf55pg94t6a5oqo914o8rs.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.salted26.firebase"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
