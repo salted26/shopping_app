@@ -1,9 +1,19 @@
+import 'dart:convert';
+
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:kpostal/kpostal.dart';
+import 'package:shopping_app/components/basic_dialog.dart';
+import 'package:shopping_app/constants.dart';
+import 'package:shopping_app/enum/delivery_status.dart';
+import 'package:shopping_app/enum/payment_status.dart';
+import 'package:shopping_app/item_order_list_page.dart';
+import 'package:shopping_app/item_order_result_page.dart';
 import 'package:shopping_app/models/product.dart';
+import 'package:shopping_app/models/productOrder.dart';
 
 class ItemCheckoutPage extends StatefulWidget {
   const ItemCheckoutPage({super.key});
@@ -13,27 +23,13 @@ class ItemCheckoutPage extends StatefulWidget {
 }
 
 class _ItemCheckoutPageState extends State<ItemCheckoutPage> {
-  final NumberFormat numberFormat = NumberFormat('###,###,###,###');
+  final database = FirebaseFirestore.instance;
+  Query<Products>? productListRef;
+  Map<String, dynamic> cartMap = {};
+  Stream<QuerySnapshot<Products>>? productList;
+  List<int> keyList = [];
 
-  List<Products> checkoutList = [
-    Products(
-        productNo: 1,
-        productName: "노트북(Laptop)",
-        productImageUrl: "https://picsum.photos/id/1/300/300",
-        price: 600000),
-    Products(
-        productNo: 4,
-        productName: "키보드(Keyboard)",
-        productImageUrl: "https://picsum.photos/id/60/300/300",
-        price: 50000),
-  ];
-
-  List<Map<int, int>> quantityList = [
-    {1: 2},
-    {4: 3}
-  ];
-
-  int totalPrice = 0;
+  double totalPrice = 0;
 
   final formKey = GlobalKey<FormState>();
 
@@ -64,9 +60,33 @@ class _ItemCheckoutPageState extends State<ItemCheckoutPage> {
   @override
   void initState() {
     super.initState();
-    for(int i = 0; i < checkoutList.length; i++){
-      totalPrice += checkoutList[i].price! * quantityList[i][checkoutList[i].productNo]!;
+
+    // 저장한 장바구니 리스트 가져오기
+    try {
+      cartMap = json.decode(sharedPreferences.getString("cartMap") ?? "{}") ?? {};
+    } catch(e) {
+      debugPrint(e.toString());
+      cartMap = {};
     }
+
+    // 조건문에 넘길 productNo 키 값 리스트를 선언(기존값이 string에서 int로 변환)
+    cartMap.forEach(
+          (key, value) {
+        keyList.add(int.parse(key));
+      },
+    );
+
+    // 파이어스토어에서 데이터 가져오는 Ref 변수
+    if(keyList.isNotEmpty) {
+      productListRef = FirebaseFirestore.instance
+          .collection("products")
+          .withConverter(
+          fromFirestore: (snapshot, _) => Products.fromJson(snapshot.data()!),
+          toFirestore: (product, _) => product.toJson()
+      ).where("productNo", whereIn: keyList);
+    }
+
+    productList = productListRef?.orderBy("productNo").snapshots();
   }
 
   @override
@@ -79,49 +99,238 @@ class _ItemCheckoutPageState extends State<ItemCheckoutPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            ListView.builder(
-              shrinkWrap: true,
-              itemCount: checkoutList.length,
-              itemBuilder: (context, index) {
-                return checkoutContainer(
-                  productNo: checkoutList[index].productNo ?? 0,
-                  productName: checkoutList[index].productName ?? "",
-                  productImageUrl: checkoutList[index].productImageUrl ?? "",
-                  price: checkoutList[index].price ?? 0,
-                  quantity: quantityList[index][checkoutList[index].productNo] ?? 0
-                );
+            if(cartMap.isNotEmpty) StreamBuilder(
+              stream: productList,
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return ListView(
+                    shrinkWrap: true,
+                    children: snapshot.data!.docs.map((document) {
+                      if (cartMap[document.data().productNo.toString()] != null) {
+                        return checkoutContainer(
+                            productNo: document.data().productNo ?? 0,
+                            productName: document.data().productName ?? "",
+                            productImageUrl:
+                            document.data().productImageUrl ?? "",
+                            price: document.data().price ?? 0,
+                            quantity:
+                            cartMap[document.data().productNo.toString()]
+                        );
+                      }
+                      return Container();
+                    }).toList(),
+                  );
+                } else if (snapshot.hasError) {
+                  return const Center(
+                    child: Text("오류가 발생 했습니다."),
+                  );
+                } else {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                    ),
+                  );
+                }
               }
             ),
+
+            //! 입력폼 필드
             Form(
               key: formKey,
               child: Column(
                 children: [
-                  buyerNameTextField(),
-                  buyerEmailTextField(),
-                  buyerPhoneTextField(),
-                  receiverNameTextField(),
-                  receiverPhoneTextField(),
+                  inputTextField(
+                    currentController: buyerNameController,
+                    currentHintText: "주문자명"),
+                  inputTextField(
+                    currentController: buyerEmailController,
+                    currentHintText: "주문자 이메일"),
+                  inputTextField(
+                    currentController: buyerPhoneController,
+                    currentHintText: "주문자 휴대전화"),
+                  inputTextField(
+                    currentController: receiverNameController,
+                    currentHintText: "받는 사람 이름"),
+                  inputTextField(
+                    currentController: receiverPhoneController,
+                    currentHintText: "받는 사람 휴대 전화"),
                   receiverZipTextField(),
-                  receiverAddress1TextField(),
-                  receiverAddress2TextField(),
-                  userPwdTextTextField(),
-                  userConfirmPwdTextTextField(),
-                  cardNoTextField(),
-                  cardAuthTextField(),
-                  cardExpiredDateTextField(),
-                  cardPwdTowDigitsTextField(),
+                  inputTextField(
+                    currentController: receiverAddress1Controller,
+                    currentHintText: "기본 주소",
+                    isReadOnly: true),
+                  inputTextField(
+                    currentController: receiverAddress2Controller,
+                    currentHintText: "상세 주소"),
+                  inputTextField(
+                    currentController: userPwdController,
+                    currentHintText: "비회원 주문조회 비밀번호",
+                    isObscure: true),
+                  inputTextField(
+                    currentController: userConfirmPwdController,
+                    currentHintText: "비회원 주문조회 비밀번호 확인",
+                    isObscure: true),
+                  paymentMethodDropdownButton(),
+                  if (selectedPaymentMethod == "카드결제")
+                    Column(
+                      children: [
+                        inputTextField(
+                          currentController: cardNoController,
+                          currentHintText: "카드번호"),
+                        inputTextField(
+                          currentHintText: "카드명의자 주민번호 앞자리 또는 사업자번호",
+                          currentController: cardAuthController,
+                          currentMaxLength: 10),
+                        inputTextField(
+                          currentController: cardExpiredDateController,
+                          currentHintText: "카드 만료일 (YYYYMM)",
+                          currentMaxLength: 6),
+                        inputTextField(
+                          currentController: cardPwdTwoDigitsController,
+                          currentHintText: "카드 비밀번호 앞2자리",
+                          currentMaxLength: 2,
+                          isObscure: true),
+                      ],
+                    ),
+                  if (selectedPaymentMethod == "무통장입금")
+                    inputTextField(
+                      currentController: depositNameController,
+                      currentHintText: "입금자명"),
                 ],
               ),
-            )
-          ]
+            ),
+
+          ],
         ),
       ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(20),
-        child: FilledButton(
-          onPressed: () {},
-          child: Text("총 ${numberFormat.format(totalPrice)}원 결제하기")
-        ),
+
+
+
+      bottomNavigationBar: cartMap.isEmpty
+        ? const Center(
+          child: Text("장바구니에 담긴 제품이 없습니다."),
+        )
+        : StreamBuilder(
+          stream: productList,
+          builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            totalPrice = 0;
+            snapshot.data?.docs.forEach((document) {
+              if (cartMap[document.data().productNo.toString()] != null) {
+                totalPrice += cartMap[document.data().productNo.toString()] * document.data().price ?? 0;
+              }
+            });
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: FilledButton(
+                onPressed: () {
+                  if(formKey.currentState!.validate()) {
+                    if(selectedPaymentMethod == "결제수단선택") {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: true,
+                        builder: (context) {
+                          return BasicDialog(
+                            content: "결제수단을 선택해 주세요",
+                            buttonText: "닫기",
+                            buttonFunction: () => Navigator.of(context).pop(),
+                          );
+                        }
+                      );
+                      return;
+                    }
+
+                    List<int> bytes = utf8.encode(userPwdController.text);
+                    Digest hashPwd = sha256.convert(bytes);
+                    String orderNo = "${DateFormat("yMdhms").format(DateTime.now())}=${DateTime.now().millisecond}";
+
+                    snapshot.data?.docs.forEach(
+                      (document) {
+                        ProductOrder productOrder = ProductOrder(
+                          orderNo: orderNo,
+                          productNo: document.data().productNo,
+                          orderDate: DateFormat('y-M-d h:m:s').format(DateTime.now()),
+                          buyerName: buyerNameController.text,
+                          buyerEmail: buyerEmailController.text,
+                          buyerPhone: buyerPhoneController.text,
+                          receiverName: receiverNameController.text,
+                          receiverPhone: receiverPhoneController.text,
+                          receiverZip: receiverZipController.text,
+                          receiverAddress1: receiverAddress1Controller.text,
+                          receiverAddress2: receiverAddress2Controller.text,
+                          userPwd: hashPwd.toString(),
+                          paymentMethod: selectedPaymentMethod,
+                          quantity: cartMap[document.data().productNo.toString()],
+                          unitPrice: document.data().price,
+                          totalPrice: cartMap[document.data().productNo.toString()] * document.data().price,
+                          paymentStatus: PaymentStatus.waiting.statusName,
+                          deliveryStatus: DeliveryStatus.waiting.statusName,
+                        );
+                        print(jsonEncode(productOrder));
+                        try {
+                          database.collection("orders").add(productOrder.toJson());
+                        } catch(e) {
+                          showDialog(
+                            context: context,
+                            builder: (context) {
+                              return AlertDialog(
+                                content: Padding(
+                                  padding: const EdgeInsets.all(15),
+                                  child: Column(
+                                    children: [
+                                      Center(
+                                        child: Text("오류가 발생했습니다."),
+                                      )
+                                    ],
+                                  ),
+                                ),
+                                actions: [
+                                  Center(
+                                    child: FilledButton(
+                                      onPressed: () => {
+                                        Navigator.pop(context)
+                                      },
+                                      child: Text("확인")
+                                    ),
+                                  )
+                                ],
+                              );
+                            }
+                          );
+                          return;
+                        }
+                      }
+                    );
+
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (context) {
+                        return ItemOrderResultPage(
+                          paymentMethod: selectedPaymentMethod,
+                          paymentAmount: totalPrice,
+                          receiverName: receiverNameController.text,
+                          receiverPhone: receiverPhoneController.text,
+                          zip: receiverZipController.text,
+                          address1: receiverAddress1Controller.text,
+                          address2: receiverAddress2Controller.text
+                        );
+                      }
+                    ));
+                  }
+                },
+              child: Text("총 ${numberFormat.format(totalPrice)}원 결제하기"),
+              ));
+          } else if (snapshot.hasError) {
+            return const Center(
+              child: Text("오류가 발생 했습니다."),
+            );
+          } else {
+            return const Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
+            );
+          }
+        }
       ),
     );
   }
@@ -130,7 +339,7 @@ class _ItemCheckoutPageState extends State<ItemCheckoutPage> {
     required int productNo,
     required String productName,
     required String productImageUrl,
-    required int price,
+    required double price,
     required int quantity,
   }){
     return Container(
@@ -141,6 +350,7 @@ class _ItemCheckoutPageState extends State<ItemCheckoutPage> {
           CachedNetworkImage(
             width: MediaQuery.of(context).size.width * 0.3,
             fit: BoxFit.cover,
+            height: 130,
             imageUrl: productImageUrl,
             placeholder: (context, url) {
               return const Center(
@@ -163,7 +373,6 @@ class _ItemCheckoutPageState extends State<ItemCheckoutPage> {
               children: [
                 Text(
                   productName,
-                  textScaleFactor: 1.2,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                   ),
@@ -194,71 +403,6 @@ class _ItemCheckoutPageState extends State<ItemCheckoutPage> {
             ),
           )
         ],
-      ),
-    );
-  }
-
-  Widget buyerNameTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: buyerNameController,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "주문자 이름",
-        ),
-      ),
-    );
-  }
-
-  Widget buyerEmailTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: buyerEmailController,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "주문자 이메일",
-        ),
-      ),
-    );
-  }
-
-  Widget buyerPhoneTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: buyerPhoneController,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "주문자 휴대폰번호",
-        ),
-      ),
-    );
-  }
-
-  Widget receiverNameTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: receiverNameController,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "수령인 이름",
-        ),
-      ),
-    );
-  }
-
-  Widget receiverPhoneTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: receiverPhoneController,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "수령인 휴대폰번호",
-        ),
       ),
     );
   }
@@ -298,7 +442,7 @@ class _ItemCheckoutPageState extends State<ItemCheckoutPage> {
               ),
             ),
             child: const Padding(
-              padding: const EdgeInsets.symmetric(vertical: 22),
+              padding: EdgeInsets.symmetric(vertical: 22),
               child: Text("우편 번호 찾기"),
             ),
           )
@@ -307,112 +451,68 @@ class _ItemCheckoutPageState extends State<ItemCheckoutPage> {
     );
   }
 
-  Widget receiverAddress1TextField() {
+  Widget inputTextField({
+    required TextEditingController currentController,
+    required String currentHintText,
+    int? currentMaxLength,
+    bool isObscure = false,
+    bool isReadOnly = false
+  }) {
     return Padding(
       padding: const EdgeInsets.all(8),
       child: TextFormField(
-        controller: receiverAddress1Controller,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "수령인 주소",
+        validator: (val) {
+          if(val!.isEmpty) {
+            return "내용을 입력해 주세요.";
+          } else {
+            if(currentController == userConfirmPwdController &&
+                userPwdController.text != userConfirmPwdController.text) {
+              return "비밀번호가 일치하지 않습니다.";
+            }
+          }
+          return null;
+        },
+        controller: currentController,
+        maxLength: currentMaxLength,
+        obscureText: isObscure,
+        readOnly: isReadOnly,
+        decoration: InputDecoration(
+          border: const OutlineInputBorder(),
+          hintText: currentHintText,
         ),
       ),
     );
   }
 
-  Widget receiverAddress2TextField() {
-    return Padding(
+  Widget paymentMethodDropdownButton() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.all(8),
       padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: receiverAddress2Controller,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "상세 주소",
+      decoration: BoxDecoration(
+        border: Border.all(
+          width: 0.5,
         ),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: DropdownButton<String>(
+        value: selectedPaymentMethod,
+        onChanged: (String? value) {
+          setState(() {
+            selectedPaymentMethod = value ?? "" ;
+          });
+        },
+        items: paymentMethodList.map<DropdownMenuItem<String>>((String value) {
+          return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value)
+          );
+        }).toList(),
+        isExpanded: true,
+        underline: Container(),
       ),
     );
   }
-
-  Widget userPwdTextTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: userPwdController,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "비회원 주문조회 비밀번호",
-        ),
-      ),
-    );
-  }
-
-  Widget userConfirmPwdTextTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: userConfirmPwdController,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "비회원 주문조회 비밀번호 확인",
-        ),
-      ),
-    );
-  }
-
-  Widget cardNoTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: cardNoController,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "카드번호",
-        ),
-      ),
-    );
-  }
-
-  Widget cardAuthTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: cardAuthController,
-        maxLength: 6,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "카드명의자 생년월일(YYMMDD)",
-        ),
-      ),
-    );
-  }
-
-  Widget cardExpiredDateTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: cardExpiredDateController,
-        maxLength: 4,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "카드 만료일(YYMM)",
-        ),
-      ),
-    );
-  }
-
-  Widget cardPwdTowDigitsTextField() {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: TextFormField(
-        controller: cardPwdTwoDigitsController,
-        maxLength: 2,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          hintText: "카드 비밀번호 앞 2자리",
-        ),
-        obscureText: true,
-      ),
-    );
-  }
-
 }
+
+

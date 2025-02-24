@@ -3,23 +3,23 @@ class Products {
   String? productName;
   String? productDetails;
   String? productImageUrl;
-  int? price;
+  double? price;
 
   Products({
     this.productNo,
     this.productName,
     this.productDetails,
     this.productImageUrl,
-    this.price
+    this.price,
   });
 
-  Products.fromJson(Map<String, dynamic> json) {
-    productNo = int.parse(json['productNo']);
-    productName = json['productNo'];
-    productDetails = json['productDetails'];
-    productImageUrl = json['productImageUrl'];
-    price = int.parse(json['price']);
-  }
+  Products.fromJson(Map<String, Object?> json)
+      : this(
+    productNo: json['productNo'] as int,
+    productName: json['productName'] as String,
+    productImageUrl: json['productImageUrl'] as String,
+    price: (json['price'] as int).toDouble(),
+  );
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = {};
